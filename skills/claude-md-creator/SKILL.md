@@ -1,150 +1,144 @@
 ---
 name: claude-md-creator
-description: "Creates minimal, high-signal CLAUDE.md and AGENTS.md context files for a project. Reads the codebase to discover build commands, project structure, conventions, and CI requirements. Use when setting up a new project, onboarding a codebase, or when an existing CLAUDE.md is outdated or bloated."
+description: "Creates or updates minimal, high-signal CLAUDE.md files by analyzing the codebase. Discovers build commands, structure, conventions, and CI config. Use when setting up a new project, onboarding a codebase, or when an existing CLAUDE.md is outdated or bloated."
+tools: Read, Glob, Grep, Bash, Edit
 ---
 
 # CLAUDE.md Creator
 
-Generates minimal, accurate CLAUDE.md and AGENTS.md files by inspecting the actual codebase.
-No aspirational rules — only empirically verifiable facts.
+Generate or update minimal, accurate CLAUDE.md files by inspecting the actual codebase.
+No aspirational rules -- only empirically verifiable facts.
 
----
+## When to Use
 
-## Scope
+- **Create**: Project has no CLAUDE.md, or existing one is severely outdated
+- **Update**: After major refactoring, dependency changes, or CI pipeline changes
+- **Trim**: Existing CLAUDE.md exceeds 200 lines or contains bloat
 
-Use this skill when:
-- Setting up a new project for Claude Code
-- A project's CLAUDE.md is missing, outdated, or bloated (100+ lines)
-- After major project restructuring
-- When onboarding a new codebase
+Do NOT use when the project already has a well-maintained CLAUDE.md under 100 lines.
 
-Do NOT use when:
-- The project already has a well-maintained CLAUDE.md under 50 lines
-- The user just wants to add a single entry to an existing CLAUDE.md (edit directly instead)
+## Phase 1: Codebase Analysis
 
----
-
-## Process
-
-### 1. Discover Build/Test Commands
-
-Check these sources in order:
+Scan these sources in order. **Extract actual commands -- do not guess.**
 
 | Source | What to Extract |
 |---|---|
-| `package.json` (scripts section) | npm/pnpm/yarn commands |
-| `Makefile` / `Justfile` | build and test targets |
-| `pyproject.toml` / `setup.py` | Python build config |
-| `Cargo.toml` | Rust build config |
-| `go.mod` | Go module info |
-| CI config (`.github/workflows/`, `.gitlab-ci.yml`) | Required checks |
-| `Dockerfile` / `docker-compose.yml` | Container setup |
+| `package.json` / `pnpm-workspace.yaml` | scripts, package manager, monorepo structure |
+| `Makefile` / `Justfile` | build/test/lint targets |
+| `pyproject.toml` / `setup.py` | Python build, test, lint config |
+| `Cargo.toml` / `go.mod` / `go.work` | Rust/Go build config |
+| `.github/workflows/*.yml` / `.gitlab-ci.yml` | CI checks, required status checks |
+| Lint/format (`.eslintrc*`, `ruff.toml`, `.prettierrc*`, `biome.json`) | Enforced style rules |
+| Type configs (`tsconfig.json`, `mypy.ini`, `pyrightconfig.json`) | Type-check strictness |
+| `Dockerfile` / `docker-compose.yml` | Container setup, required services |
 
-**Extract the actual commands. Do not guess.**
+Also check:
+- Top-level directory layout (source root, test root, output dirs)
+- Monorepo structure (`packages/`, `apps/`, workspace config)
+- `.claude/rules/` directory (avoid duplicating existing rules)
+- Existing `CLAUDE.md` in parent directories (avoid contradictions)
 
-### 2. Discover Project Structure
+## Phase 2: Generate CLAUDE.md
 
-- List top-level directories and their purpose
-- Identify the source root, test root, and output directories
-- Note monorepo structure if applicable
-
-### 3. Discover Conventions
-
-Look for evidence of:
-- Linting config (`.eslintrc`, `ruff.toml`, `.golangci.yml`)
-- Formatting config (`.prettierrc`, `rustfmt.toml`, `black` in pyproject.toml)
-- Type checking (`tsconfig.json`, `mypy.ini`, `pyright`)
-- Import ordering rules
-- Naming conventions (check existing code, not aspirational docs)
-
-### 4. Discover CI Requirements
-
-From CI config, extract:
-- What checks must pass before merge
-- Required test coverage thresholds
-- Branch protection rules
-
----
-
-## Output: CLAUDE.md
-
-Target: **under 50 lines.** Every line must earn its place.
+Target: **under 100 lines.** Every line must earn its place. Use only sections that apply.
 
 ```markdown
-# CLAUDE.md
+# Project Name
 
-## Build & Test
-[actual commands to build, test, lint, format]
+One-line description.
 
-## Project Structure
-[3-5 line overview of key directories]
+## Commands
+- `<build>` -- production build
+- `<dev>` -- start dev server
+- `<test>` -- run full test suite; `<test:single>` for single file
+- `<lint>` -- lint and format check
+- `<typecheck>` -- type checking
 
-## Conventions
-[only conventions with tooling enforcement — if there is no linter rule, it is aspirational]
+## Architecture
+- `src/` -- application source
+- `tests/` -- test files, mirrors src/ structure
+- `dist/` -- build output (gitignored)
 
-## CI Requirements
-[what must pass before merge]
+## Code Style
+- [Only rules enforced by tooling, e.g. "ESLint enforces camelCase (see .eslintrc)"]
+- [Preferences Claude cannot infer: "Use ES modules, not CommonJS"]
+
+## Gotchas
+- [Non-obvious behaviors, ordering dependencies, env quirks]
+- [Common mistakes specific to this project]
 ```
 
-**Example:**
+### Example
 
 ```markdown
-# CLAUDE.md
+# my-api
 
-## Build & Test
-- `npm run build` — TypeScript compilation
-- `npm test` — Jest test suite
-- `npm run lint` — ESLint + Prettier check
-- `npm run typecheck` — tsc --noEmit
+Express + TypeScript REST API with PostgreSQL.
 
-## Project Structure
-- `src/` — application source (TypeScript)
-- `tests/` — Jest test files, mirrors src/ structure
-- `dist/` — build output (gitignored)
+## Commands
+- `pnpm build` -- TypeScript compilation
+- `pnpm dev` -- dev server with hot reload (port 3000)
+- `pnpm test` -- Vitest suite; `pnpm test -- path/to/file` for single file
+- `pnpm lint` -- ESLint + Prettier check
+- `pnpm typecheck` -- tsc --noEmit
 
-## Conventions
-- ESLint enforces camelCase for variables, PascalCase for components
-- Prettier formats on save (see .prettierrc)
-- Strict TypeScript (noImplicitAny, strictNullChecks)
+## Architecture
+- `src/routes/` -- API route handlers
+- `src/services/` -- business logic
+- `src/db/` -- Drizzle ORM schema and migrations
+- `tests/` -- mirrors src/, factories in `tests/factories/`
 
-## CI Requirements
-- All tests pass, lint clean, typecheck clean before merge
-- Coverage threshold: 80% lines
+## Code Style
+- ESLint enforces camelCase variables, PascalCase types (see .eslintrc.cjs)
+- Strict TypeScript: noImplicitAny, strictNullChecks
+
+## Gotchas
+- Tests need `--runInBand` (shared DB state, no parallel)
+- `NEXT_PUBLIC_*` env vars must be set at build time, not runtime
+- Run `pnpm db:migrate` after pulling if migrations changed
 ```
 
----
+## Phase 3: Update Workflow (Existing CLAUDE.md)
 
-## Output: AGENTS.md (Optional)
+When updating rather than creating from scratch:
+1. Read the existing CLAUDE.md fully
+2. Cross-reference each section against the current codebase
+3. **Remove** stale commands, dead file paths, outdated conventions
+4. **Add** newly discovered commands, gotchas, or architectural changes
+5. **Do not append blindly** -- rewrite sections that have drifted
+6. Show a diff of proposed changes before applying
 
-Only create if the project uses subagents or multi-agent patterns.
-Same rules: empirical, minimal, under 50 lines.
+For large projects, use `@path/to/file` imports instead of inlining:
+```markdown
+See @docs/api-conventions.md for API design rules.
+```
 
----
+## Anti-Bloat Rules
 
-## Do NOT
+| DO Include | DO NOT Include |
+|---|---|
+| Commands Claude cannot guess | Anything Claude discovers by reading code |
+| Style rules differing from defaults | Standard conventions Claude already knows |
+| Non-obvious gotchas and env quirks | Generic advice ("write clean code") |
+| Architecture only if non-obvious | File-by-file codebase descriptions |
+| Repo workflow (branch naming, PR) | Long tutorials or explanations |
+| Required env vars or setup steps | Info that changes frequently (link instead) |
 
-- **Do NOT create bloated CLAUDE.md files (100+ lines).** Nobody reads them, and they waste context window.
-- **Do NOT include aspirational rules.** "We follow clean architecture" means nothing without tooling enforcement.
-- **Do NOT duplicate the README.** CLAUDE.md is for the AI, not for humans.
-- **Do NOT list every file in the project.** Only mention files the AI needs to know about and would not find on its own.
-- **Do NOT include style guides without enforcement.** "Use camelCase" means nothing without a linter rule. Instead: "ESLint enforces camelCase (see .eslintrc)."
-- **Do NOT guess build commands.** Run them to verify they work.
-
----
+**If there is no linter rule enforcing it, it is aspirational -- leave it out.**
 
 ## Verification
 
-After generating:
-1. Run every build/test command listed to confirm they work
-2. Verify file paths mentioned actually exist
-3. Confirm CI requirements match the actual CI config
-4. Check total line count — if over 50, cut more
+After generating or updating:
+1. **Run** every command listed -- confirm each succeeds
+2. **Check** all file paths mentioned actually exist
+3. **Verify** CI requirements match actual workflow files
+4. **Count** lines -- over 100? Ask "would removing this cause Claude to make mistakes?"
+5. **Diff** against parent-directory CLAUDE.md to avoid contradictions
 
----
+## Principles
 
-## Key Principles
-
-- **Empirical over aspirational.** Only document what the codebase actually does.
-- **Commands over descriptions.** `npm test` is better than "run the test suite."
-- **50-line budget forces prioritization.** If you cannot fit it in 50 lines, you are including things the AI does not need.
-- **Update, do not accumulate.** When the project changes, rewrite CLAUDE.md from scratch rather than appending.
+- **Empirical over aspirational.** Only document what the codebase enforces.
+- **Commands over descriptions.** `pnpm test` beats "run the test suite."
+- **100-line budget forces prioritization.** Cut what Claude does not need.
+- **Update, do not accumulate.** Rewrite stale sections rather than appending.
+- **Concise is kind.** Bloated CLAUDE.md causes Claude to ignore your instructions.

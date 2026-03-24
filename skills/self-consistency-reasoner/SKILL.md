@@ -1,107 +1,109 @@
 ---
 name: self-consistency-reasoner
-description: "Internal reasoning technique for high-stakes multi-step inference. Generates 3-5 independent reasoning paths, takes majority vote, and flags disagreements. Used automatically by systematic-debugging, verification, and code review — not invoked directly."
+description: "Background reasoning technique for high-stakes inference. Generates 3-5 independent reasoning paths, takes majority vote, flags disagreements. Activates automatically during debugging, verification, and architectural decisions — never invoked directly."
 user-invocable: false
 ---
 
 # Self-Consistency Reasoner
 
-An internal reasoning technique — NOT a standalone skill.
-Embedded within systematic-debugging, verification-before-completion, and other skills that require high-confidence multi-step reasoning.
+A background reasoning technique — NOT a user-facing skill.
+Based on Wang et al. 2022 ("Self-Consistency Improves Chain of Thought Reasoning in Language Models").
+Core insight: complex problems admit multiple valid reasoning paths; the correct answer emerges from their convergence.
 
----
+## When to Activate
 
-## Scope
+**ACTIVATE** for:
+- Root cause analysis with multiple plausible hypotheses
+- Verification where a wrong conclusion has high cost (claiming "fixed" when it is not)
+- Complex code reasoning: concurrency, state machines, recursive logic, security
+- Architectural decisions with long-term consequences
+- Any inference chain longer than 3 dependent steps
 
-**Activate** when:
-- Root cause analysis where multiple hypotheses are plausible
-- Verification steps where a wrong conclusion has high cost (claiming "fixed" when it is not)
-- Complex code reasoning (concurrency, state machines, recursive logic)
-- Any inference chain longer than 3 steps where each step depends on the previous
-
-**Do NOT activate** when:
-- Simple lookups or straightforward questions
-- There is only one plausible answer
+**SKIP** for:
+- Simple lookups, straightforward questions, single plausible answer
 - Routine code changes with obvious correctness
-- Low-stakes decisions that are easily reversible
+- Low-stakes, easily reversible decisions
 
----
+## Algorithm
 
-## Process
+```
+1. FRAME    → State the specific question as a concrete, answerable claim
+2. SAMPLE   → Generate N independent reasoning paths (min 3, max 5)
+3. COMPARE  → Extract each path's conclusion and tally votes
+4. DECIDE   → Apply confidence threshold (see table below)
+5. SURFACE  → If confidence < High, flag disagreement to user
+```
 
-### 1. Identify the Question
+### Step 1: Frame the Question
 
-State the specific question being reasoned about. Must be concrete and answerable.
+Must be concrete and falsifiable:
+- "What is causing the null pointer on line 47?"
+- "Will this refactoring break existing callers?"
+- "Is this race condition reachable in production?"
 
-**Examples:**
-- "What is causing the null pointer exception on line 47?"
-- "Will this refactoring break any existing callers?"
-- "Is this race condition actually reachable?"
+### Step 2: Generate Independent Paths
 
-### 2. Generate Independent Reasoning Paths (3-5)
+Each path MUST reason from evidence independently. Do NOT let earlier paths bias later ones.
 
-For each path, start from the evidence (code, logs, error messages) independently and reason step by step to a conclusion.
+| Path | Angle |
+|------|-------|
+| A | Trace data flow forward from inputs |
+| B | Trace backward from the symptom/error |
+| C | Reason about what must be true for correct behavior |
+| D | Search for similar patterns elsewhere in codebase |
+| E | Consider environmental/config/timing factors |
 
-Do NOT let earlier paths influence later ones. Each path should approach from a different angle:
+Use 3 paths for moderate-stakes questions. Use 5 for high-stakes (security, data loss, architectural).
 
-| Path | Approach |
-|---|---|
-| **Path A** | Trace the data flow forward |
-| **Path B** | Trace the error backward from the symptom |
-| **Path C** | Consider what must be true for the code to work correctly |
-| **Path D** | Look for similar patterns elsewhere in the codebase |
-| **Path E** | Consider environmental/configuration factors |
+### Step 3: Compare and Vote
 
-### 3. Compare Results
+Extract each path's final answer. Tally.
+
+### Step 4: Apply Confidence Threshold
 
 | Agreement | Confidence | Action |
-|---|---|---|
-| Unanimous (5/5, 4/4, 3/3) | High | Proceed with the conclusion |
-| Strong majority (4/5, 3/4) | Moderate | Note the dissenting path — it may identify an edge case |
-| Split (3/5, 2/3) | Low | Investigate further before concluding |
-| No majority | Insufficient | Do not conclude; gather more evidence |
+|-----------|------------|--------|
+| Unanimous (N/N) | **High (>90%)** | Proceed. No need to surface reasoning. |
+| Strong majority (N-1/N) | **Moderate (70-90%)** | Proceed but note the dissenting path — it may reveal an edge case. |
+| Bare majority (3/5, 2/3) | **Low (50-70%)** | Pause. Investigate the split before concluding. Surface to user. |
+| No majority | **Insufficient (<50%)** | Do NOT conclude. Gather more evidence. Tell the user. |
 
-### 4. Report Disagreements
+### Step 5: Surface Disagreements
 
-When paths disagree, surface the disagreement explicitly:
+When confidence is Moderate or lower, surface explicitly:
 
-> **Reasoning paths disagree:**
-> - Paths A, B, C conclude: [X]
-> - Paths D, E conclude: [Y]
-> - Disagreement stems from: [what assumption or evidence differs]
+> **Reasoning paths disagree (confidence: [X]%):**
+> - Paths A, B, C conclude: [answer 1]
+> - Paths D, E conclude: [answer 2]
+> - Disagreement stems from: [differing assumption or evidence]
 > - To resolve: [what additional information would settle it]
 
----
+## Example
+
+**Question:** "Is the retry loop in `api_client.py:L120` causing the timeout cascade?"
+
+| Path | Reasoning | Conclusion |
+|------|-----------|------------|
+| A (forward trace) | Request enters, retry loop fires 3x with 30s timeout, 90s total blocks event loop | **Yes** |
+| B (backward trace) | Timeout logs show 90s gaps matching 3x retry interval | **Yes** |
+| C (correct behavior) | Retry should use exponential backoff with jitter; current code uses fixed delay | **Yes** |
+| D (pattern search) | Similar retry in `webhook_client.py` uses backoff and has no timeout issues | **Yes** |
+
+**Result:** 4/4 unanimous. High confidence. Proceed with fix — no need to surface reasoning.
+
+If Path D had instead found that `webhook_client.py` also times out, confidence drops to Moderate and the disagreement gets flagged: the problem may be systemic, not local.
 
 ## Integration Points
 
-### In systematic-debugging
-Use self-consistency when forming the initial hypothesis about root cause.
-Three independent reasoning paths minimum before committing to a debugging direction.
+- **systematic-debugging**: 3+ paths before committing to a root cause hypothesis
+- **verification-before-completion**: Validate that a fix actually resolves the issue, not just "looks right"
+- **code review**: Each path considers a different failure mode of the proposed change
+- **architectural decisions**: Each path evaluates from a different quality attribute (performance, maintainability, security)
 
-### In verification-before-completion
-Use self-consistency when evaluating whether a fix actually resolves the issue.
-Prevents "looks right to me" false confidence.
+## Rules
 
-### In code review
-Use self-consistency when evaluating whether a change could introduce bugs.
-Each path considers a different failure mode.
-
----
-
-## Do NOT
-
-- **Do NOT produce visible output for each path** unless the user explicitly asks to see the reasoning.
-- **Do NOT let later paths rubber-stamp earlier ones.** Independence is critical — genuinely re-examine the evidence each time.
-- **Do NOT use this for low-stakes decisions.** The technique costs extra tokens; only activate when the cost of being wrong exceeds the cost of extra computation.
-- **Do NOT force 5 paths when 3 suffice.** Use the minimum number needed for confidence.
-- **Do NOT treat split results as failure.** Split results mean the problem is harder than it looks — that is valuable signal.
-
----
-
-## Key Principles
-
-- **Independence is critical.** If later paths just agree with the first, the technique adds no value.
-- **Disagreement is signal, not noise.** Split results reveal genuine uncertainty.
-- **This is thinking, not ceremony.** The value is in improved answer quality, not in visible process.
-- **Cost-aware.** Only activate for high-stakes reasoning.
+1. **Independence is non-negotiable.** If later paths rubber-stamp the first, the technique adds zero value.
+2. **Disagreement is signal.** Split results mean the problem is harder than it looks — surface this.
+3. **Silent by default.** Do NOT produce visible output for each path unless confidence is below High or the user asks.
+4. **Cost-aware.** Use 3 paths when 3 suffice. Only scale to 5 for high-stakes questions.
+5. **Consistency ~ confidence.** Lower agreement = lower confidence = more caution. This lets the model "know when it doesn't know."

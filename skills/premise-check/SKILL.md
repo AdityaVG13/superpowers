@@ -1,6 +1,6 @@
 ---
 name: premise-check
-description: "Validates whether proposed work should exist before investing in it. Invoke BEFORE designing, planning, or building anything non-trivial to catch flawed premises, unnecessary complexity, or wrong-problem solutions early."
+description: "Validates whether proposed work should exist before building it. Catches flawed premises, unnecessary complexity, and wrong-problem solutions early."
 ---
 
 # Premise Check
@@ -12,105 +12,139 @@ Run this BEFORE brainstorming, designing, or building anything non-trivial.
 
 ## Scope
 
-Use this skill when:
+Use when:
 - Starting any new feature, tool, or system
-- A request feels like it might be solving the wrong problem
-- You notice yourself building something complex to solve something simple
+- A request feels like solving the wrong problem
+- Building something complex to solve something simple
 - Requirements come from assumptions rather than evidence
 
-Do NOT use when:
-- The user explicitly says "just do it" or "skip validation"
-- The task is a known bug fix with a clear reproduction
-- The work is a minor refactor under 20 lines
+Skip when: user says "just do it", task is a clear bug fix, or change is under 20 lines.
 
 ---
 
-## The Four Questions
+## Step 1: The 5 Whys -- Find the Real Problem
 
-Ask each question honestly. If any answer is unsatisfying, pause and discuss with the user before proceeding.
+Drill into the problem before evaluating the solution. Ask "why" until you hit a root cause.
 
-### 1. Does this solve a real problem?
+1. "Why do we need [proposed work]?" -- surfaces the stated problem
+2. "Why does [stated problem] exist?" -- reveals the mechanism
+3. "Why hasn't [mechanism] been addressed?" -- uncovers constraints
+4. "Why is [constraint] present?" -- exposes systemic causes
+5. "Why is [systemic cause] tolerated?" -- reaches the root
 
-- Can you name a specific person or scenario that has this problem today?
-- Is the problem frequent enough to justify a solution?
-- Is the pain real, or is this anticipating a problem that may never materialize?
+Stop early if you hit root cause before question 5.
 
-**Red flags:** "We might need this someday," "It would be nice to have," "Other projects do this."
+**Example:**
+> "We need a caching layer." Why? "API is slow." Why? "Re-queries DB every request." Why? "No deduplication." Why? "Nobody profiled it."
+> Root cause: missing profiling, not missing cache.
 
-### 2. Is there a simpler alternative?
+---
 
-- Could this be solved with configuration instead of code?
-- Could an existing tool, library, or pattern handle this?
+## Step 2: Four Validation Questions
+
+### Q1. Is this a real problem?
+- Can you name a specific user or scenario experiencing this today?
+- How frequent? (Daily? Weekly? Once ever?)
+- Is the pain measured or assumed?
+
+**Red flags:** "We might need this someday." "Other projects do this." "It would be nice."
+
+### Q2. Is there a simpler alternative?
+- Could configuration, a flag, or an env var solve this?
+- Does an existing tool or built-in handle it?
 - Could a manual process work until the problem is better understood?
-- What is the simplest thing that could possibly work?
+- What is the minimum change that addresses the root cause?
 
-**Red flags:** Building a framework when a function would do. Adding infrastructure when a script would suffice.
+**Red flags:** Framework when a function would do. Infrastructure when a script suffices.
 
-**Example:** User asks for a caching layer. Simpler alternative: add an HTTP `Cache-Control` header. Even simpler: check if the endpoint is actually slow first.
+### Q3. What are we assuming?
 
-### 3. What assumptions are we making?
+List every assumption, then rate confidence:
 
-List every assumption embedded in the proposed approach:
-- About user behavior
-- About scale and performance requirements
-- About the stability of requirements
-- About the technical environment
-- About what "done" looks like
+| Assumption | Confidence |
+|---|---|
+| Users actually want X | Known / Believed / Assumed |
+| This needs to handle Y scale | Known / Believed / Assumed |
+| Requirements won't change soon | Known / Believed / Assumed |
 
-For each assumption, rate confidence:
-- **Known** — have evidence
-- **Believed** — reasonable but unverified
-- **Assumed** — no evidence, just convention
+- **Known** = have evidence (data, feedback, measurements)
+- **Believed** = reasonable but unverified
+- **Assumed** = no evidence, just convention or gut feel
 
-### 4. What evidence would change our mind?
+Any "Assumed" item with high impact is a reason to pause.
 
-Name specific, concrete findings that would make you abandon or fundamentally redesign this approach:
-- "If we discover users actually do X instead of Y"
-- "If the existing system already handles this case"
-- "If the performance requirement is actually 10x lower than assumed"
+### Q4. What would change our mind?
+Name specific findings that would kill or reshape this approach:
+- "If the existing system already handles this edge case"
+- "If users do X instead of Y when observed"
+- "If the performance requirement is 10x lower than assumed"
 
-If you cannot name anything that would change your mind, you are not thinking critically enough.
+If you cannot name anything, you are not thinking critically.
+
+---
+
+## Step 3: Decision Tree
+
+```
+               Root cause clear?
+              /                 \
+            YES                  NO --> STOP: Investigate first
+             |
+        Real problem?
+       /            \
+     YES             NO --> STOP: Don't build
+      |
+  Simpler path?
+  /          \
+YES           NO
+ |             |
+PIVOT      High-impact "Assumed" items?
+            /              \
+          YES               NO
+           |                 |
+     PROCEED WITH        PROCEED
+       CAUTION
+```
+
+- **Proceed** -- root cause clear, problem real, no simpler path, assumptions verified
+- **Proceed with caution** -- move forward but validate unverified assumptions early
+- **Pivot** -- real problem, but a simpler solution exists; redirect effort
+- **Stop** -- flawed premise or insufficient understanding; investigate first
 
 ---
 
 ## Output Format
 
-Present findings as:
-
-> **Problem:** [one sentence]
+> **Root cause (5 Whys):** [one sentence]
 >
-> **Verdict:** Proceed / Proceed with caution / Reconsider
+> **Verdict:** Proceed / Proceed with caution / Pivot / Stop
 >
-> **Simpler alternatives considered:** [list]
+> **The real problem:** [may differ from stated request]
 >
-> **Key assumptions (confidence):**
-> - [assumption] — [Known/Believed/Assumed]
+> **Simpler alternatives considered:** [list, or "none viable"]
+>
+> **Key assumptions:** [assumption] -- [Known/Believed/Assumed]
 >
 > **Would reconsider if:** [list]
-
----
-
-## After the Check
-
-- **Proceed:** Move to brainstorming or planning with documented assumptions.
-- **Proceed with caution:** Move forward but validate the "Believed" assumptions early.
-- **Reconsider:** Discuss alternatives with the user before investing further.
+>
+> **Next step:** [one concrete action]
 
 ---
 
 ## Do NOT
 
-- **Do NOT skip this for "obvious" features.** Obvious features often hide flawed premises.
-- **Do NOT let the check take longer than the work.** Five minutes maximum for small tasks.
-- **Do NOT present the check as a blocker.** It is a conversation, not a gate.
-- **Do NOT conclude "Reconsider" without offering concrete alternatives.** The user needs a path forward.
-- **Do NOT re-run premise-check after the user has already approved the premise.** One check per decision.
+- **Skip this for "obvious" features.** They often hide flawed premises.
+- **Let the check take longer than the work.** Five minutes max.
+- **Present the check as a blocker.** It is a conversation, not a gate.
+- **Conclude "Stop" without a path forward.** Always suggest what to investigate instead.
+- **Re-run after user has approved.** One check per decision.
 
 ---
 
 ## Key Principles
 
-- **Five minutes of premise-checking saves five hours of wrong-direction work.**
-- **"We should build X" is not a premise. "Users need X because Y" is a premise.**
-- **Simpler is not lazier.** The best solution is often the least impressive one.
-- **Assumptions are not bad — unexamined assumptions are.**
+- Five minutes of premise-checking saves five hours of wrong-direction work.
+- "We should build X" is not a premise. "Users need X because Y" is a premise.
+- The root cause is almost never what it appears on first description.
+- Simpler is not lazier. The best solution is often the least impressive one.
+- Assumptions are not bad. Unexamined assumptions are.

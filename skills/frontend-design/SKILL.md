@@ -1,14 +1,9 @@
 ---
 name: frontend-design
-description: "Production-grade frontend/UI implementation standards for React, Vue, Svelte, or HTML. Enforces visual quality, accessibility (WCAG 2.1 AA), responsive design, dark mode, and professional polish. Use when building any user-visible UI component, page, or layout."
+description: "Enforces production-grade frontend and UI implementation standards for React, Vue, Svelte, HTML, CSS, and Tailwind. Covers visual quality, accessibility (WCAG 2.1 AA), responsive design, dark mode, design systems, and professional polish. Activates when the user builds, modifies, or reviews any user-visible UI component, page, layout, or styling."
 ---
 
 # Frontend Design Standards
-
-Enforces production-quality frontend implementation.
-Applies to ANY work that produces user-visible UI: React, Vue, Svelte, HTML, CSS.
-
----
 
 ## Scope
 
@@ -142,11 +137,16 @@ Every interactive component must handle these states:
 
 ## Verification Checklist
 
-Before marking frontend work complete:
-1. Lighthouse accessibility score >= 90
-2. Keyboard-only navigation works for all interactions
-3. No console errors or warnings
-4. Responsive at all standard breakpoints (320px, 768px, 1024px, 1440px)
-5. Dark mode renders correctly
-6. All text is real content, not placeholder
-7. Loading, error, and empty states implemented
+Before marking frontend work complete, verify programmatically where possible and flag remaining items for human review.
+
+**Agent-verifiable:**
+1. Keyboard-only navigation works for all interactions
+2. No console errors or warnings
+3. All text is real content, not placeholder
+4. Loading, error, and empty states implemented
+5. No hardcoded color values in component styles
+
+**Flag for human review:**
+6. Lighthouse accessibility score >= 90
+7. Responsive at all standard breakpoints (320px, 768px, 1024px, 1440px)
+8. Dark mode renders correctly in both themes
