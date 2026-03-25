@@ -55,7 +55,12 @@ const CRITICAL_PATTERNS = [
   {
     name: "format-disk",
     desc: "Disk formatting command",
-    regex: /\b(mkfs|format)\b.*\/(dev|disk)/i,
+    test: (cmd) => {
+      // mkfs is always dangerous with a device path
+      if (/\bmkfs\b.*\/(dev|disk)/i.test(cmd)) return true;
+      // format must be the command itself (start of line or after ; & |), not a flag like --format
+      return /(?:^|[;&|]\s*)format\b.*\/(dev|disk)/i.test(cmd);
+    },
   },
   {
     name: "dd-destructive",
